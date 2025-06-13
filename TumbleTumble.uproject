@@ -1,0 +1,22 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "{D4287151-4774-71DD-CE97-3DBD0061C30C}",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "TumbleTumble",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		}
+	]
+}
