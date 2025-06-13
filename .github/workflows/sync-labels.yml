@@ -1,0 +1,123 @@
+name: 🔍 Label Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: '테스트 모드를 선택하세요'
+        required: true
+        type: choice
+        default: 'download_test'
+        options:
+          - 'download_test'
+          - 'apply_labels'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  test-download:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_mode == 'download_test'
+    
+    steps:
+      - name: 🧪 Test 1 - 기본 curl로 다운로드 테스트
+        run: |
+          echo "============================================="
+          echo "🧪 테스트 1: 토큰 없이 다운로드 시도"
+          echo "============================================="
+          
+          if curl -f -s -o labels.yml https://raw.githubusercontent.com/ForNaggi/.github/main/labels/labels.yml; then
+            echo "✅ 다운로드 성공!"
+            echo "📄 파일 크기: $(wc -c < labels.yml) bytes"
+            echo "📄 라인 수: $(wc -l < labels.yml) lines"
+            echo ""
+            echo "📋 파일 내용 미리보기:"
+            head -10 labels.yml
+          else
+            echo "❌ 다운로드 실패"
+            echo "curl 종료 코드: $?"
+          fi
+
+      - name: 🧪 Test 2 - 상세 정보로 다운로드 테스트
+        run: |
+          echo ""
+          echo "============================================="
+          echo "🧪 테스트 2: 상세 정보와 함께 다운로드"
+          echo "============================================="
+          
+          echo "📡 URL 접근성 테스트:"
+          curl -I https://raw.githubusercontent.com/ForNaggi/.github/main/labels/labels.yml
+          
+          echo ""
+          echo "📥 다운로드 시도 (상세 로그):"
+          curl -v -f -o labels-test.yml https://raw.githubusercontent.com/ForNaggi/.github/main/labels/labels.yml
+          
+          if [ -f labels-test.yml ]; then
+            echo "✅ Test 2 성공!"
+            echo "📊 파일 정보:"
+            ls -la labels-test.yml
+          else
+            echo "❌ Test 2 실패"
+          fi
+
+      - name: 📋 테스트 결과 요약
+        run: |
+          echo ""
+          echo "============================================="
+          echo "📋 테스트 결과 요약"
+          echo "============================================="
+          
+          if [ -f labels.yml ] && [ -f labels-test.yml ]; then
+            echo "🎉 두 테스트 모두 성공!"
+            echo "✅ 토큰 없이 파일 접근 가능"
+            echo "➡️ 다음 단계: apply_labels 모드로 실제 라벨 적용 테스트"
+          elif [ -f labels.yml ] || [ -f labels-test.yml ]; then
+            echo "⚠️ 일부 테스트만 성공"
+            echo "🔄 네트워크 문제일 수 있음 - 다시 시도해보세요"
+          else
+            echo "❌ 모든 테스트 실패"
+            echo "🔐 토큰이 필요할 수 있습니다"
+            echo "➡️ 다음 단계: Personal Access Token 설정"
+          fi
+
+  apply-labels:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_mode == 'apply_labels'
+    
+    steps:
+      - name: 📥 조직 라벨 다운로드
+        run: |
+          echo "============================================="
+          echo "📥 조직 표준 라벨 다운로드 중..."
+          echo "============================================="
+          
+          if curl -f -s -o labels.yml https://raw.githubusercontent.com/ForNaggi/.github/main/labels/labels.yml; then
+            echo "✅ 다운로드 성공!"
+            echo ""
+            echo "📋 적용될 라벨 목록:"
+            grep "name:" labels.yml | head -10
+            echo "... (총 $(grep -c "name:" labels.yml)개 라벨)"
+          else
+            echo "❌ 다운로드 실패!"
+            echo "🛑 라벨 적용을 중단합니다."
+            exit 1
+          fi
+
+      - name: 🏷️ 라벨 적용
+        uses: crazy-max/ghaction-github-labeler@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          yaml-file: labels.yml
+          skip-delete: false
+
+      - name: 🎉 완료 안내
+        run: |
+          echo "============================================="
+          echo "🎉 라벨 동기화 완료!"
+          echo "============================================="
+          echo "✅ MakeChatStudy 조직 표준 라벨 적용됨"
+          echo "📋 Issues → Labels에서 결과를 확인하세요"
+          echo ""
+          echo "📊 현재 라벨 수: $(curl -s -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' https://api.github.com/repos/${{ github.repository }}/labels | jq length 2>/dev/null || echo '확인 중...')"
