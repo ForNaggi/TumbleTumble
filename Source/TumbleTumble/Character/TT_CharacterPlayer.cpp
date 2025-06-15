@@ -12,6 +12,7 @@
 
 
 #include "GameFrameWork/CharacterMovementComponent.h"
+#include "../Game/TT_GameModeBase.h"
 
 ATT_CharacterPlayer::ATT_CharacterPlayer()
 {
@@ -61,26 +62,26 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 
 	// Input.
 
-	static ConstructorHelpers::FObjectFinder<UInputMappingContext> MappingContextRef(TEXT("/Game/TumbleTumble/Input/IMC_Default.IMC_Default"));
+	static ConstructorHelpers::FObjectFinder<UInputMappingContext> MappingContextRef(TEXT("/Game/TumbleTown/Input/IMC_Default.IMC_Default"));
 	if (MappingContextRef.Object)
 	{
 		DefaultMappingContext = MappingContextRef.Object;
 	}
 
-	static ConstructorHelpers::FObjectFinder<UInputAction> MoveActionRef(TEXT("/Game/TumbleTumble/Input/Actions/IA_Move.IA_Move"));
+	static ConstructorHelpers::FObjectFinder<UInputAction> MoveActionRef(TEXT("/Game/TumbleTown/Input/Actions/IA_Move.IA_Move"));
 	if (MoveActionRef.Object)
 	{
 		MoveAction = MoveActionRef.Object;
 	}
 
-	static ConstructorHelpers::FObjectFinder<UInputAction> LookActionRef(TEXT("/Game/TumbleTumble/Input/Actions/IA_Look.IA_Look"));
+	static ConstructorHelpers::FObjectFinder<UInputAction> LookActionRef(TEXT("/Game/TumbleTown/Input/Actions/IA_Look.IA_Look"));
 	if (LookActionRef.Object)
 	{
 		LookAction = LookActionRef.Object;
 	}
 
 
-	static ConstructorHelpers::FObjectFinder<UInputAction> JumpActionRef(TEXT("/Game/TumbleTumble/Input/Actions/IA_Jump.IA_Jump"));
+	static ConstructorHelpers::FObjectFinder<UInputAction> JumpActionRef(TEXT("/Game/TumbleTown/Input/Actions/IA_Jump.IA_Jump"));
 	if (JumpActionRef.Object)
 	{
 		JumpAction = JumpActionRef.Object;
@@ -106,7 +107,25 @@ void ATT_CharacterPlayer::BeginPlay()
 		SubSystem->AddMappingContext(DefaultMappingContext,0);
 	}
 
+	// 초기 스폰 위치를 저장 (첫 리스폰 위치)
+	LastSavePoint = GetActorLocation();
 
+	// 델리게이트 바인딩
+	OnCheckpointUpdated.AddDynamic(this, &ATT_CharacterPlayer::UpdateCheckpoint);
+}
+
+void ATT_CharacterPlayer::Tick(float Deltatime)
+{
+	Super::Tick(Deltatime);
+
+	if (HasAuthority() && GetActorLocation().Z < -1000.f && !bIsFallingToDeath)
+	{
+		bIsFallingToDeath = true;
+		UE_LOG(LogTemp, Warning, TEXT("waitfor respawn"));
+
+		// 2초 후 리스폰
+		GetWorld()->GetTimerManager().SetTimer(RespawnTimerHandle, this, &ATT_CharacterPlayer::RespawnAtCheckpoint, 1.0f, false);
+	}
 }
 
 void ATT_CharacterPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -140,7 +159,6 @@ void ATT_CharacterPlayer::Move(const FInputActionValue& Value)
 	// 무브먼트 컴포넌트에 값 전달.
 	AddMovementInput(ForwardVector, Movement.X);
 	AddMovementInput(RightVector, Movement.Y);
-	UE_LOG(LogTemp, Warning, TEXT(" Move Called: X = %f, Y = %f"), Movement.X, Movement.Y);
 
 
 }
@@ -155,4 +173,34 @@ void ATT_CharacterPlayer::Look(const FInputActionValue& Value)
 	AddControllerYawInput(LookVector.X);
 	AddControllerPitchInput(LookVector.Y);
 
+}
+
+void ATT_CharacterPlayer::UpdateCheckpoint(FVector NewSaveLocation)
+{
+	LastSavePoint = NewSaveLocation + FVector(0, 0, 500.f);;
+	UE_LOG(LogTemp, Log, TEXT("SavePoint Update: %s"), *LastSavePoint.ToString());
+}
+
+
+void ATT_CharacterPlayer::RespawnAtCheckpoint()
+{
+	bIsFallingToDeath = false;
+
+	FVector RespawnLoc = LastSavePoint.IsNearlyZero()
+		? FVector(0, 0, 2000.f) // 디폴트 위치
+		: LastSavePoint;
+
+	FRotator RespawnRot = FRotator::ZeroRotator;
+
+
+	if (AController* PC = GetController())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RespawnLocation: %s"), *RespawnLoc.ToString());
+
+		// 서버에서만 호출되므로 AuthGameMode 사용
+		if (AGameModeBase* GM = GetWorld()->GetAuthGameMode())
+		{
+			GM->RestartPlayerAtTransform(PC, FTransform(RespawnRot, RespawnLoc));
+		}
+	}
 }
