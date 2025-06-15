@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "TT_CharacterPlayer.h"
@@ -16,17 +16,17 @@
 
 ATT_CharacterPlayer::ATT_CharacterPlayer()
 {
-	// ÄÁÆ®·Ñ·¯ÀÇ È¸ÀüÀ» ¹Ş¾Æ¼­ ¼³Á¤ÇÏ´Â ¸ğµå¸¦ ¸ğµÎ ÇØÁ¦.
+	// ì»¨íŠ¸ë¡¤ëŸ¬ì˜ íšŒì „ì„ ë°›ì•„ì„œ ì„¤ì •í•˜ëŠ” ëª¨ë“œë¥¼ ëª¨ë‘ í•´ì œ.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
-	// ¹«ºê¸ÕÆ® ¼³Á¤.
+	// ë¬´ë¸Œë¨¼íŠ¸ ì„¤ì •.
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
 	GetCharacterMovement()->JumpZVelocity = 700.0f;
 
-	// ÄÄÆ÷³ÍÆ® ¼³Á¤.
+	// ì»´í¬ë„ŒíŠ¸ ì„¤ì •.
 	//GetCapsuleComponent()->SetCapsuleHalfHeight(88.0f);
 
 	GetMesh()->SetRelativeLocationAndRotation(
@@ -34,14 +34,14 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 		FRotator(0.0f, -90.0f, 0.0f)
 	);
 
-	// ¸®¼Ò½º ¼³Á¤.
+	// ë¦¬ì†ŒìŠ¤ ì„¤ì •.
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> CharacterMesh(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn.SKM_Quinn"));
 	if (CharacterMesh.Object)
 	{
 		GetMesh()->SetSkeletalMesh(CharacterMesh.Object);
 	}
 
-	// Animation Blueprint ¼³Á¤.
+	// Animation Blueprint ì„¤ì •.
 	static ConstructorHelpers::FClassFinder<UAnimInstance> CharacterAnim(TEXT("/Game/Characters/Mannequins/Animations/ABP_Quinn.ABP_Quinn_C"));
 	if (CharacterAnim.Class)
 	{
@@ -50,7 +50,7 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 
 
 
-	//Ä«¸Ş¶ó ¼³Á¤
+	//ì¹´ë©”ë¼ ì„¤ì •
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(RootComponent);
 	SpringArm->TargetArmLength = 500.0f;
@@ -107,10 +107,10 @@ void ATT_CharacterPlayer::BeginPlay()
 		SubSystem->AddMappingContext(DefaultMappingContext,0);
 	}
 
-	// ÃÊ±â ½ºÆù À§Ä¡¸¦ ÀúÀå (Ã¹ ¸®½ºÆù À§Ä¡)
+	// ì´ˆê¸° ìŠ¤í° ìœ„ì¹˜ë¥¼ ì €ì¥ (ì²« ë¦¬ìŠ¤í° ìœ„ì¹˜)
 	LastSavePoint = GetActorLocation();
 
-	// µ¨¸®°ÔÀÌÆ® ¹ÙÀÎµù
+	// ë¸ë¦¬ê²Œì´íŠ¸ ë°”ì¸ë”©
 	OnCheckpointUpdated.AddDynamic(this, &ATT_CharacterPlayer::UpdateCheckpoint);
 }
 
@@ -123,8 +123,7 @@ void ATT_CharacterPlayer::Tick(float Deltatime)
 		bIsFallingToDeath = true;
 		UE_LOG(LogTemp, Warning, TEXT("waitfor respawn"));
 
-		// 2ÃÊ ÈÄ ¸®½ºÆù
-		GetWorld()->GetTimerManager().SetTimer(RespawnTimerHandle, this, &ATT_CharacterPlayer::RespawnAtCheckpoint, 1.0f, false);
+		RespawnAtCheckpoint();
 	}
 }
 
@@ -145,18 +144,18 @@ void ATT_CharacterPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInput
 void ATT_CharacterPlayer::Move(const FInputActionValue& Value)
 {
 
-	// ÀÔ·Â °ª ÀĞ±â.
+	// ì…ë ¥ ê°’ ì½ê¸°.
 	FVector2D Movement = Value.Get<FVector2D>();
 
-	// ÄÁÆ®·Ñ·¯ÀÇ È¸Àü °ª.
+	// ì»¨íŠ¸ë¡¤ëŸ¬ì˜ íšŒì „ ê°’.
 	FRotator Rotation = GetControlRotation();
 	FRotator YawRotation(0.0f, Rotation.Yaw, 0.0f);
 
-	// ¹æÇâ ±¸ÇÏ±â.
+	// ë°©í–¥ êµ¬í•˜ê¸°.
 	FVector ForwardVector = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 	FVector RightVector = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-	// ¹«ºê¸ÕÆ® ÄÄÆ÷³ÍÆ®¿¡ °ª Àü´Ş.
+	// ë¬´ë¸Œë¨¼íŠ¸ ì»´í¬ë„ŒíŠ¸ì— ê°’ ì „ë‹¬.
 	AddMovementInput(ForwardVector, Movement.X);
 	AddMovementInput(RightVector, Movement.Y);
 
@@ -166,10 +165,10 @@ void ATT_CharacterPlayer::Move(const FInputActionValue& Value)
 void ATT_CharacterPlayer::Look(const FInputActionValue& Value)
 {
 
-	// ÀÔ·Â °ª ÀĞ±â.
+	// ì…ë ¥ ê°’ ì½ê¸°.
 	FVector2D LookVector = Value.Get<FVector2D>();
 
-	// ÄÁÆ®·Ñ·¯¿¡ È¸Àü Ãß°¡.
+	// ì»¨íŠ¸ë¡¤ëŸ¬ì— íšŒì „ ì¶”ê°€.
 	AddControllerYawInput(LookVector.X);
 	AddControllerPitchInput(LookVector.Y);
 
@@ -182,25 +181,57 @@ void ATT_CharacterPlayer::UpdateCheckpoint(FVector NewSaveLocation)
 }
 
 
+/**
+ * RespawnAtCheckpointëŠ” í”Œë ˆì´ì–´ê°€ ë‚™ì‚¬í•œ í›„ ì¼ì • ì‹œê°„ ë’¤ ì €ì¥ëœ ìœ„ì¹˜ë¡œ ë¦¬ìŠ¤í°ì‹œí‚¤ëŠ” í•¨ìˆ˜ì…ë‹ˆë‹¤.
+ *
+ * ì´ í•¨ìˆ˜ëŠ” ì„œë²„ì—ì„œë§Œ í˜¸ì¶œë˜ë©°, ê¸°ì¡´ Pawnì„ ì œê±°í•œ ë’¤ GameModeë¥¼ í†µí•´ ìƒˆ Pawnì„ ì§€ì •ëœ ìœ„ì¹˜ì— ë¦¬ìŠ¤í°í•©ë‹ˆë‹¤.
+ * ìºë¦­í„°ê°€ ë§µ ë°–ìœ¼ë¡œ ë–¨ì–´ì¡Œì„ ë•Œ ìë™ìœ¼ë¡œ ì´ í•¨ìˆ˜ê°€ ì‹¤í–‰ë˜ë©°, í•­ìƒ ê³µì¤‘ì—ì„œ ë¦¬ìŠ¤í°ë˜ë„ë¡ ì˜¤í”„ì…‹ì„ í¬í•¨í•©ë‹ˆë‹¤.
+ */
 void ATT_CharacterPlayer::RespawnAtCheckpoint()
 {
 	bIsFallingToDeath = false;
 
 	FVector RespawnLoc = LastSavePoint.IsNearlyZero()
-		? FVector(0, 0, 2000.f) // µğÆúÆ® À§Ä¡
-		: LastSavePoint;
+		? FVector(0, 0, 2000.f)  // ì´ˆê¸° ë¦¬ìŠ¤í° ìœ„ì¹˜
+		: LastSavePoint + FVector(0, 0, 100.f);  // í•­ìƒ ê³µì¤‘ì—ì„œ ë¦¬ìŠ¤í°
 
 	FRotator RespawnRot = FRotator::ZeroRotator;
 
-
-	if (AController* PC = GetController())
+	if (HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("RespawnLocation: %s"), *RespawnLoc.ToString());
-
-		// ¼­¹ö¿¡¼­¸¸ È£ÃâµÇ¹Ç·Î AuthGameMode »ç¿ë
-		if (AGameModeBase* GM = GetWorld()->GetAuthGameMode())
+		if (AController* PC = GetController())
 		{
-			GM->RestartPlayerAtTransform(PC, FTransform(RespawnRot, RespawnLoc));
+			// ê¸°ì¡´ Pawn ì œê±° (ì¤‘ë³µ ì†Œìœ  ë°©ì§€)
+			APawn* OldPawn = PC->GetPawn();
+			if (OldPawn && OldPawn != this)
+			{
+				UE_LOG(LogTemp, Warning, TEXT(" ê¸°ì¡´ Pawn ì œê±°: %s"), *OldPawn->GetName());
+				PC->UnPossess();
+				OldPawn->Destroy();
+			}
+
+			if (AGameModeBase* GM = GetWorld()->GetAuthGameMode())
+			{
+				UE_LOG(LogTemp, Warning, TEXT(" RespawnLocation: %s"), *RespawnLoc.ToString());
+
+				// GameModeë¥¼ í†µí•´ ì§€ì • ìœ„ì¹˜ë¡œ ë¦¬ìŠ¤í°
+				GM->RestartPlayerAtTransform(PC, FTransform(RespawnRot, RespawnLoc));
+
+				// ë¦¬ìŠ¤í° ê²°ê³¼ í™•ì¸
+				if (APawn* NewPawn = PC->GetPawn())
+				{
+					FVector CorrectedLocation = RespawnLoc + FVector(0.f, 0.f, 50.f);  // 50 ì •ë„ ìœ„ë¡œ ë„ì›€
+					NewPawn->SetActorLocation(CorrectedLocation, false, nullptr, ETeleportType::TeleportPhysics);
+
+					UE_LOG(LogTemp, Warning, TEXT("ê°•ì œ ìœ„ì¹˜ ë³´ì •: %s"), *CorrectedLocation.ToString());
+					UE_LOG(LogTemp, Warning, TEXT(" Respawn ì™„ë£Œ: %s"), *NewPawn->GetName());
+					UE_LOG(LogTemp, Warning, TEXT(" ìœ„ì¹˜: %s"), *NewPawn->GetActorLocation().ToString());
+				}
+				else
+				{
+					UE_LOG(LogTemp, Error, TEXT(" Respawn ì‹¤íŒ¨: Pawn ì—†ìŒ"));
+				}
+			}
 		}
 	}
 }
