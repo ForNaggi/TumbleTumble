@@ -26,6 +26,16 @@ void AChatTestController::BeginPlay()
     }
 }
 
+void AChatTestController::PlayerTick(float DeltaTime)
+{
+    UChatManager* ChatManager = this->GetChatManager();
+    if (ChatManager == nullptr || ChatManager->GetConnectionState() != EChatConnectionState::Connected)
+    {
+        return;
+    }
+    ChatManager->CheckForMessages();
+}
+
 UChatManager* AChatTestController::GetChatManager()
 {
     if (this->SubsystemChatManager == nullptr)

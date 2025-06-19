@@ -17,6 +17,8 @@ class TUMBLETUMBLE_API AChatTestController : public APlayerController
 public:
     virtual void BeginPlay() override;
 
+    virtual void PlayerTick(float DeltaTime);
+
     UFUNCTION(Exec)
     void ChatConnect(const FString& IP = TEXT("127.0.0.1"), int32 Port = 5500);
 

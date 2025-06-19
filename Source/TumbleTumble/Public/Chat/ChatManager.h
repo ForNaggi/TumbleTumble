@@ -62,6 +62,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Chat")
     bool SendMessage(const FString& Message);
 
+    /** 메시지 수신 확인 */
+    UFUNCTION(BlueprintCallable, Category = "Chat")
+    void CheckForMessages();
+
     /** 현재 연결 상태 확인 */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Chat")
     EChatConnectionState GetConnectionState() const { return ConnectionState; }
@@ -93,9 +97,6 @@ private:
     // 상수들
     /** 수신 버퍼 크기 */
     static const int32 BUFFER_SIZE = 1024;  
-
-    /** 메시지 수신 확인 */
-    void CheckForMessages();
 
     /** 실제 데이터 수신 처리 */
     void ReceiveData();
