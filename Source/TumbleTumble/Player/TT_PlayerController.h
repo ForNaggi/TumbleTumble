@@ -17,5 +17,7 @@ class TUMBLETUMBLE_API ATT_PlayerController : public APlayerController
 public: 
 
 	virtual void BeginPlay() override;
+
+	virtual void Tick(float Deltatime) override;
 	
 };
