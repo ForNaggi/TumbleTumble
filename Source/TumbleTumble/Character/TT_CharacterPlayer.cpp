@@ -13,12 +13,16 @@
 
 #include "GameFrameWork/CharacterMovementComponent.h"
 #include "../Game/TT_GameModeBase.h"
+#include "Net/UnrealNetwork.h"
+#include "TT_ArmTargetComponent.h"
+#include "TT_RagdollComponent.h"
+#include "PhysicsEngine/PhysicalAnimationComponent.h"
 
 ATT_CharacterPlayer::ATT_CharacterPlayer()
 {
 	// 컨트롤러의 회전을 받아서 설정하는 모드를 모두 해제.
 	bUseControllerRotationPitch = false;
-	bUseControllerRotationYaw = false;
+	bUseControllerRotationYaw = true;
 	bUseControllerRotationRoll = false;
 
 	// 무브먼트 설정.
@@ -30,7 +34,7 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 	//GetCapsuleComponent()->SetCapsuleHalfHeight(88.0f);
 
 	GetMesh()->SetRelativeLocationAndRotation(
-		FVector(0.0f, 0.0f, 0.0f),
+		FVector(0.f, 0.f, -88.f),
 		FRotator(0.0f, -90.0f, 0.0f)
 	);
 
@@ -47,6 +51,10 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 	{
 		GetMesh()->SetAnimClass(CharacterAnim.Class);
 	}
+	//메쉬 레플리케이트
+	GetMesh()->SetIsReplicated(true);
+	SetReplicates(true);
+	SetReplicateMovement(true);
 
 
 
@@ -58,7 +66,23 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm);
-	Camera-> bUsePawnControlRotation = false;
+	Camera->bUsePawnControlRotation = false;
+
+	//Ragdoll
+	RagdollComponent = CreateDefaultSubobject<UTT_RagdollComponent>(TEXT("RagdollComponent"));
+
+	//physicalAnimation
+
+	PhysicalAnimation = CreateDefaultSubobject<UPhysicalAnimationComponent>(TEXT("PhysicalAnimation"));
+
+
+	//팔설정
+	LeftArmTarget = CreateDefaultSubobject<UTT_ArmTargetComponent>(TEXT("LeftArmTarget"));
+	LeftArmTarget->SetupAttachment(GetMesh(), TEXT("hand_l")); // 왼손 본에 붙임
+
+	RightArmTarget = CreateDefaultSubobject<UTT_ArmTargetComponent>(TEXT("RightArmTarget"));
+	RightArmTarget->SetupAttachment(GetMesh(), TEXT("hand_r"));//오른 손 보ㄴ에 붙임
+
 
 	// Input.
 
@@ -88,6 +112,37 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 	}
 
 
+	static ConstructorHelpers::FObjectFinder<UInputAction> LeftHandActionRef(TEXT("/Game/TumbleTown/Input/Actions/IA_LeftHand.IA_LeftHand"));
+	if (LeftHandActionRef.Object)
+	{
+		LeftHandAction = LeftHandActionRef.Object;
+
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputAction> RightHandActionRef(TEXT("/Game/TumbleTown/Input/Actions/IA_RightHand.IA_RightHand"));
+	if (RightHandActionRef.Object)
+	{
+		RightHandAction = RightHandActionRef.Object;
+
+	}
+	static ConstructorHelpers::FObjectFinder<UInputAction> ArmVerticalActionRef(TEXT("/Game/TumbleTown/Input/Actions/IA_ArmVertical.IA_ArmVertical"));
+	if (ArmVerticalActionRef.Object)
+	{
+		ArmVerticalAction = ArmVerticalActionRef.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputAction> StandUpActionRef(TEXT("/Game/TumbleTown/Input/Actions/IA_ArmVertical.IA_ArmVertical"));
+	if (StandUpActionRef.Object)
+	{
+		ArmVerticalAction = StandUpActionRef.Object;
+	}
+
+
+
+
+
+
+
 
 
 }
@@ -97,18 +152,19 @@ void ATT_CharacterPlayer::BeginPlay()
 
 	Super::BeginPlay();
 
-	UE_LOG(LogTemp, Warning, TEXT("Controller: %s"), *GetController()->GetName());
-
-
 	// Add InputMapping Context to Enhanced Input System.
-	APlayerController* PlayerController = CastChecked<APlayerController>(GetController());
-	if (auto SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
-	{
-		SubSystem->AddMappingContext(DefaultMappingContext,0);
-	}
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
 
+	// [중요] 서버는 LocalPlayer가 존재하지 않기 때문에 GetLocalPlayer()는 nullptr를 반환함
+	// 따라서 Client에서만 실행되도록 조건 추가
 	// 초기 스폰 위치를 저장 (첫 리스폰 위치)
 	LastSavePoint = GetActorLocation();
+
+	RagdollComponent->Server_SetRagdoll(
+		GetMesh(), GetCapsuleComponent(), TEXT("Hips"),
+		PhysicalAnimation, TEXT("RightFoot"), TEXT("LeftFoot"),
+		GetCharacterMovement(), true
+	);
 
 	// 델리게이트 바인딩
 	OnCheckpointUpdated.AddDynamic(this, &ATT_CharacterPlayer::UpdateCheckpoint);
@@ -124,9 +180,48 @@ void ATT_CharacterPlayer::Tick(float Deltatime)
 		UE_LOG(LogTemp, Warning, TEXT("waitfor respawn"));
 
 		RespawnAtCheckpoint();
+
+		if (RagdollComponent)
+		{
+			RagdollComponent->Server_ActivateRagdoll();  
+		}
 	}
 }
 
+void ATT_CharacterPlayer::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	// [공통 처리] - 첫 소유 시 Checkpoint 델리게이트 등
+	if (HasAuthority())
+	{
+		// 최초 스폰이거나 리스폰일 때
+		LastSavePoint = GetActorLocation();
+		OnCheckpointUpdated.AddDynamic(this, &ATT_CharacterPlayer::UpdateCheckpoint);
+	}
+
+	// [클라이언트 전용 처리] - 인풋 매핑 재설정
+	if (APlayerController* PC = Cast<APlayerController>(NewController))
+	{
+		if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("PossessedBy 입력 매핑 추가: %s"), *PC->GetName());
+				SubSystem->AddMappingContext(DefaultMappingContext, 0);
+			}
+		}
+	}
+}
+
+void ATT_CharacterPlayer::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ATT_CharacterPlayer, LastSavePoint);
+	DOREPLIFETIME(ATT_CharacterPlayer, bIsLeftMouseHeld);
+	DOREPLIFETIME(ATT_CharacterPlayer, bIsRightMouseHeld);
+}
 void ATT_CharacterPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 
@@ -137,12 +232,29 @@ void ATT_CharacterPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInput
 	EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ATT_CharacterPlayer::Move);
 	EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ATT_CharacterPlayer::Look);
 
-	EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ACharacter::Jump);
+	//손설정
 
+	EnhancedInputComponent->BindAction(ArmVerticalAction, ETriggerEvent::Triggered, this, &ATT_CharacterPlayer::ControlLeftArmVertical);
+	//왼손
+	EnhancedInputComponent->BindAction(LeftHandAction, ETriggerEvent::Started, this, &ATT_CharacterPlayer::OnLeftMousePressed);
+	EnhancedInputComponent->BindAction(LeftHandAction, ETriggerEvent::Completed, this, &ATT_CharacterPlayer::OnLeftMouseReleased);
+	//오른손
+	EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Started, this, &ATT_CharacterPlayer::OnRightMousePressed);
+	EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Completed, this, &ATT_CharacterPlayer::OnRightMouseReleased);
+
+	//일어나기
+	EnhancedInputComponent->BindAction(StandUpAction, ETriggerEvent::Completed, this, &ATT_CharacterPlayer::OnStandUpInput);
+
+
+	EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ACharacter::Jump);
 }
 
 void ATT_CharacterPlayer::Move(const FInputActionValue& Value)
 {
+	if (RagdollComponent && !RagdollComponent->bCanMove)
+	{
+		return; // Ragdoll 상태에선 이동 금지
+	}
 
 	// 입력 값 읽기.
 	FVector2D Movement = Value.Get<FVector2D>();
@@ -158,6 +270,7 @@ void ATT_CharacterPlayer::Move(const FInputActionValue& Value)
 	// 무브먼트 컴포넌트에 값 전달.
 	AddMovementInput(ForwardVector, Movement.X);
 	AddMovementInput(RightVector, Movement.Y);
+	// 	UE_LOG(LogTemp, Warning, TEXT(" Move Called: X = %f, Y = %f"), Movement.X, Movement.Y);
 
 
 }
@@ -168,10 +281,116 @@ void ATT_CharacterPlayer::Look(const FInputActionValue& Value)
 	// 입력 값 읽기.
 	FVector2D LookVector = Value.Get<FVector2D>();
 
+	// 회전량 (감도는 필요 시 곱하기 값 조정)
+	float YawValue = LookVector.X * 5.0f;
+
 	// 컨트롤러에 회전 추가.
 	AddControllerYawInput(LookVector.X);
 	AddControllerPitchInput(LookVector.Y);
 
+	// 캐릭터 자체 회전 (컨트롤러가 아닌 Actor를 직접 회전)
+	AddActorLocalRotation(FRotator(0.f, YawValue, 0.f));
+
+}
+
+void ATT_CharacterPlayer::ControlLeftArmVertical(const FInputActionValue& Value)
+{
+	const float VerticalInput = Value.Get<float>();
+	if (bIsLeftMouseHeld)
+	{
+		FVector Loc = LeftArmTarget->GetRelativeLocation();
+		Loc.Z = FMath::Clamp(Loc.Z + VerticalInput * 5.f, -20.f, 100.f);
+		LeftArmTarget->SetRelativeLocation(Loc);
+
+		UE_LOG(LogTemp, Warning, TEXT("[LeftArm] Input: %.2f → Z: %.2f"), VerticalInput, Loc.Z);
+
+	}
+
+	if (bIsRightMouseHeld)
+	{
+		FVector Loc = RightArmTarget->GetRelativeLocation();
+		Loc.Z = FMath::Clamp(Loc.Z + VerticalInput * 5.f, -20.f, 100.f);
+		RightArmTarget->SetRelativeLocation(Loc);
+	}
+
+}
+
+void ATT_CharacterPlayer::OnLeftMousePressed(const FInputActionValue& Value)
+{
+	UE_LOG(LogTemp, Warning, TEXT("왼쪽 마우스 눌림"));
+
+	if (HasAuthority())
+	{
+		bIsLeftMouseHeld = true;
+		LeftArmTarget->SetRelativeLocation(FVector(30.f, -20.f, 30.f));
+	}
+	else
+	{
+		Server_SetLeftMouseHeld(true);
+	}
+
+}
+
+void ATT_CharacterPlayer::OnLeftMouseReleased(const FInputActionValue& Value)
+{
+	if (HasAuthority())
+	{
+		bIsLeftMouseHeld = false;
+	}
+	else
+	{
+		Server_SetLeftMouseHeld(false);
+	}
+}
+
+void ATT_CharacterPlayer::OnRightMousePressed(const FInputActionValue& Value)
+{
+	UE_LOG(LogTemp, Warning, TEXT("오른쪽 마우스 눌림"));
+
+	if (HasAuthority())
+	{
+		bIsRightMouseHeld = true;
+		RightArmTarget->SetRelativeLocation(FVector(30.f, 20.f, 100.f));  // ← 앞으로 나란히 위치
+
+	}
+	else
+	{
+		Server_SetRightMouseHeld(true);
+	}
+}
+
+void ATT_CharacterPlayer::OnRightMouseReleased(const FInputActionValue& Value)
+{
+	if (HasAuthority())
+	{
+		bIsRightMouseHeld = false;
+	}
+	else
+	{
+		Server_SetRightMouseHeld(false);
+	}
+}
+
+
+void ATT_CharacterPlayer::Server_SetLeftMouseHeld_Implementation(bool bNewState)
+{
+	bIsLeftMouseHeld = bNewState;
+}
+
+void ATT_CharacterPlayer::Server_SetRightMouseHeld_Implementation(bool bNewState)
+{
+	bIsRightMouseHeld = bNewState;
+}
+
+
+
+
+void ATT_CharacterPlayer::OnStandUpInput()
+{
+	if (RagdollComponent && !RagdollComponent->bCanMove)
+	{
+		RagdollComponent->StandUp(); // 내부에서 서버 호출 처리
+	}
 }
 
 void ATT_CharacterPlayer::UpdateCheckpoint(FVector NewSaveLocation)
@@ -235,3 +454,4 @@ void ATT_CharacterPlayer::RespawnAtCheckpoint()
 		}
 	}
 }
+
