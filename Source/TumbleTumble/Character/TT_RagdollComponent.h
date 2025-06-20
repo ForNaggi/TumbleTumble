@@ -77,7 +77,7 @@ public:
     TObjectPtr <class UAnimMontage> GettingUpAnimationBack;
 
     /** 움직일 수 있는가 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ragdoll")
+    UPROPERTY(Replicated,EditAnywhere, BlueprintReadWrite, Category="Ragdoll")
     bool bCanMove;
 
     /** 걷는 중 액티브 래그돌 사용 여부 */

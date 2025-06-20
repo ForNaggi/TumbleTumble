@@ -15,6 +15,14 @@ class TUMBLETUMBLE_API ATT_BoxGimmick : public ATT_GimIckBase
 	GENERATED_BODY()
 	
 	
-	
+public:
+	ATT_BoxGimmick();
+
+public:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<class UStaticMeshComponent> BoxMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<class UBoxComponent> OverlapPoint;
 	
 };
