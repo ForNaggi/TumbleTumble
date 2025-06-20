@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -22,7 +22,7 @@ protected:
 public:	
 virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-    /** ÀÌ ±â¹ÍÀÌ ¼­¹ö¿¡¼­ ÀÛµ¿ °¡´ÉÇÑÁö È®ÀÎÇÒ ¶§ »ç¿ëÇÒ ¼ö ÀÖ´Â ÇïÆÛ */
+    /** ì´ ê¸°ë¯¹ì´ ì„œë²„ì—ì„œ ì‘ë™ ê°€ëŠ¥í•œì§€ í™•ì¸í•  ë•Œ ì‚¬ìš©í•  ìˆ˜ ìˆëŠ” í—¬í¼ */
     UFUNCTION(BlueprintCallable, Category = "Gimmick")
     bool HasAuthorityOnServer() const;	
 	

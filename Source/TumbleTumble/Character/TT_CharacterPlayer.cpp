@@ -17,6 +17,8 @@
 #include "TT_ArmTargetComponent.h"
 #include "TT_RagdollComponent.h"
 #include "PhysicsEngine/PhysicalAnimationComponent.h"
+#include "../Action/TT_AnimInstance.h"
+#include "PhysicsEngine/PhysicsHandleComponent.h"
 
 ATT_CharacterPlayer::ATT_CharacterPlayer()
 {
@@ -37,26 +39,36 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 		FVector(0.f, 0.f, -88.f),
 		FRotator(0.0f, -90.0f, 0.0f)
 	);
-
+	GetMesh()->SetRelativeScale3D(FVector(0.0525f));
 	// 리소스 설정.
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> CharacterMesh(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn.SKM_Quinn"));
-	if (CharacterMesh.Object)
-	{
-		GetMesh()->SetSkeletalMesh(CharacterMesh.Object);
-	}
+// 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> CharacterMesh(TEXT("/Game/TumbleTown/Character/NewFolder2/HumanFallFlat.HumanFallFlat"));
+// 	if (CharacterMesh.Object)
+// 	{
+// 		GetMesh()->SetSkeletalMesh(CharacterMesh.Object);
+// 	}
 
 	// Animation Blueprint 설정.
-	static ConstructorHelpers::FClassFinder<UAnimInstance> CharacterAnim(TEXT("/Game/Characters/Mannequins/Animations/ABP_Quinn.ABP_Quinn_C"));
-	if (CharacterAnim.Class)
+// 	static ConstructorHelpers::FClassFinder<UAnimInstance> CharacterAnim(TEXT("/Game/TumbleTown/Animation/Animation2/AB_RagdollMesh_Skeleton.AB_RagdollMesh_Skeleton_C"));
+// 	if (CharacterAnim.Class)
+// 	{
+// 		GetMesh()->SetAnimClass(CharacterAnim.Class);
+// 	}
+	if (DefaultAnimInstance)
 	{
-		GetMesh()->SetAnimClass(CharacterAnim.Class);
+		GetMesh()->SetAnimClass(DefaultAnimInstance);
 	}
 	//메쉬 레플리케이트
 	GetMesh()->SetIsReplicated(true);
 	SetReplicates(true);
 	SetReplicateMovement(true);
 
+	// Physics Handle 컴포넌트 (왼손/오른손용)
+	LeftHandle = CreateDefaultSubobject<UPhysicsHandleComponent>(TEXT("LeftPhysicsHandle"));
+	RightHandle = CreateDefaultSubobject<UPhysicsHandleComponent>(TEXT("RightPhysicsHandle"));
 
+	// Replication 설정 (데디 서버 고려)
+	LeftHandle->SetIsReplicated(true);
+	RightHandle->SetIsReplicated(true);
 
 	//카메라 설정
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
@@ -74,14 +86,6 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 	//physicalAnimation
 
 	PhysicalAnimation = CreateDefaultSubobject<UPhysicalAnimationComponent>(TEXT("PhysicalAnimation"));
-
-
-	//팔설정
-	LeftArmTarget = CreateDefaultSubobject<UTT_ArmTargetComponent>(TEXT("LeftArmTarget"));
-	LeftArmTarget->SetupAttachment(GetMesh(), TEXT("hand_l")); // 왼손 본에 붙임
-
-	RightArmTarget = CreateDefaultSubobject<UTT_ArmTargetComponent>(TEXT("RightArmTarget"));
-	RightArmTarget->SetupAttachment(GetMesh(), TEXT("hand_r"));//오른 손 보ㄴ에 붙임
 
 
 	// Input.
@@ -137,14 +141,6 @@ ATT_CharacterPlayer::ATT_CharacterPlayer()
 		ArmVerticalAction = StandUpActionRef.Object;
 	}
 
-
-
-
-
-
-
-
-
 }
 
 void ATT_CharacterPlayer::BeginPlay()
@@ -158,21 +154,37 @@ void ATT_CharacterPlayer::BeginPlay()
 	// [중요] 서버는 LocalPlayer가 존재하지 않기 때문에 GetLocalPlayer()는 nullptr를 반환함
 	// 따라서 Client에서만 실행되도록 조건 추가
 	// 초기 스폰 위치를 저장 (첫 리스폰 위치)
-	LastSavePoint = GetActorLocation();
 
-	RagdollComponent->Server_SetRagdoll(
-		GetMesh(), GetCapsuleComponent(), TEXT("Hips"),
-		PhysicalAnimation, TEXT("RightFoot"), TEXT("LeftFoot"),
-		GetCharacterMovement(), true
-	);
-
+	FTimerHandle DelayHandle;
+	GetWorldTimerManager().SetTimer(DelayHandle, [this]()
+		{
+			RagdollComponent->Server_SetRagdoll(
+				GetMesh(), GetCapsuleComponent(), TEXT("Hips"),
+				PhysicalAnimation, TEXT("RightFoot"), TEXT("LeftFoot"),
+				GetCharacterMovement(), true
+			);
+		}, 0.2f, false);
 	// 델리게이트 바인딩
-	OnCheckpointUpdated.AddDynamic(this, &ATT_CharacterPlayer::UpdateCheckpoint);
 }
 
 void ATT_CharacterPlayer::Tick(float Deltatime)
 {
 	Super::Tick(Deltatime);
+
+	if (HasAuthority())
+	{
+		if (LeftHandle->GrabbedComponent)
+		{
+			FVector LeftTargetLocation = GetMesh()->GetSocketLocation(TEXT("hand_l"));
+			LeftHandle->SetTargetLocation(LeftTargetLocation);
+		}
+
+		if (RightHandle->GrabbedComponent)
+		{
+			FVector RightTargetLocation = GetMesh()->GetSocketLocation(TEXT("hand_r"));
+			RightHandle->SetTargetLocation(RightTargetLocation);
+		}
+	}
 
 	if (HasAuthority() && GetActorLocation().Z < -1000.f && !bIsFallingToDeath)
 	{
@@ -183,7 +195,7 @@ void ATT_CharacterPlayer::Tick(float Deltatime)
 
 		if (RagdollComponent)
 		{
-			RagdollComponent->Server_ActivateRagdoll();  
+			RagdollComponent->Server_ActivateRagdoll();
 		}
 	}
 }
@@ -197,18 +209,22 @@ void ATT_CharacterPlayer::PossessedBy(AController* NewController)
 	{
 		// 최초 스폰이거나 리스폰일 때
 		LastSavePoint = GetActorLocation();
+		// 델리게이트 바인딩
 		OnCheckpointUpdated.AddDynamic(this, &ATT_CharacterPlayer::UpdateCheckpoint);
 	}
 
 	// [클라이언트 전용 처리] - 인풋 매핑 재설정
 	if (APlayerController* PC = Cast<APlayerController>(NewController))
 	{
-		if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+		if (PC->IsLocalController())
 		{
-			if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
+			if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
 			{
-				UE_LOG(LogTemp, Warning, TEXT("PossessedBy 입력 매핑 추가: %s"), *PC->GetName());
-				SubSystem->AddMappingContext(DefaultMappingContext, 0);
+				if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("PossessedBy 입력 매핑 추가: %s"), *PC->GetName());
+					SubSystem->AddMappingContext(DefaultMappingContext, 0);
+				}
 			}
 		}
 	}
@@ -234,7 +250,7 @@ void ATT_CharacterPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInput
 
 	//손설정
 
-	EnhancedInputComponent->BindAction(ArmVerticalAction, ETriggerEvent::Triggered, this, &ATT_CharacterPlayer::ControlLeftArmVertical);
+// 	EnhancedInputComponent->BindAction(ArmVerticalAction, ETriggerEvent::Triggered, this, &ATT_CharacterPlayer::ControlLeftArmVertical);
 	//왼손
 	EnhancedInputComponent->BindAction(LeftHandAction, ETriggerEvent::Started, this, &ATT_CharacterPlayer::OnLeftMousePressed);
 	EnhancedInputComponent->BindAction(LeftHandAction, ETriggerEvent::Completed, this, &ATT_CharacterPlayer::OnLeftMouseReleased);
@@ -293,27 +309,23 @@ void ATT_CharacterPlayer::Look(const FInputActionValue& Value)
 
 }
 
-void ATT_CharacterPlayer::ControlLeftArmVertical(const FInputActionValue& Value)
+void ATT_CharacterPlayer::UpdateLeftLiftAnimation(bool bLifting)
 {
-	const float VerticalInput = Value.Get<float>();
-	if (bIsLeftMouseHeld)
+	if (UTT_AnimInstance* Anim = Cast<UTT_AnimInstance>(GetMesh()->GetAnimInstance()))
 	{
-		FVector Loc = LeftArmTarget->GetRelativeLocation();
-		Loc.Z = FMath::Clamp(Loc.Z + VerticalInput * 5.f, -20.f, 100.f);
-		LeftArmTarget->SetRelativeLocation(Loc);
-
-		UE_LOG(LogTemp, Warning, TEXT("[LeftArm] Input: %.2f → Z: %.2f"), VerticalInput, Loc.Z);
-
+		Anim->SetLeftLifting(bLifting);
 	}
+}
 
-	if (bIsRightMouseHeld)
+void ATT_CharacterPlayer::UpdateRightLiftAnimation(bool bLifting)
+{
+	if (UTT_AnimInstance* Anim = Cast<UTT_AnimInstance>(GetMesh()->GetAnimInstance()))
 	{
-		FVector Loc = RightArmTarget->GetRelativeLocation();
-		Loc.Z = FMath::Clamp(Loc.Z + VerticalInput * 5.f, -20.f, 100.f);
-		RightArmTarget->SetRelativeLocation(Loc);
+		Anim->SetRightLifting(bLifting);
 	}
 
 }
+
 
 void ATT_CharacterPlayer::OnLeftMousePressed(const FInputActionValue& Value)
 {
@@ -322,8 +334,10 @@ void ATT_CharacterPlayer::OnLeftMousePressed(const FInputActionValue& Value)
 	if (HasAuthority())
 	{
 		bIsLeftMouseHeld = true;
-		LeftArmTarget->SetRelativeLocation(FVector(30.f, -20.f, 30.f));
+		UpdateLeftLiftAnimation(true);
+		TryGrabObject(true);
 	}
+
 	else
 	{
 		Server_SetLeftMouseHeld(true);
@@ -336,6 +350,8 @@ void ATT_CharacterPlayer::OnLeftMouseReleased(const FInputActionValue& Value)
 	if (HasAuthority())
 	{
 		bIsLeftMouseHeld = false;
+		UpdateLeftLiftAnimation(false);
+		ServerReleaseObject(true);
 	}
 	else
 	{
@@ -350,8 +366,8 @@ void ATT_CharacterPlayer::OnRightMousePressed(const FInputActionValue& Value)
 	if (HasAuthority())
 	{
 		bIsRightMouseHeld = true;
-		RightArmTarget->SetRelativeLocation(FVector(30.f, 20.f, 100.f));  // ← 앞으로 나란히 위치
-
+		UpdateRightLiftAnimation(true);
+		TryGrabObject(false);
 	}
 	else
 	{
@@ -364,10 +380,69 @@ void ATT_CharacterPlayer::OnRightMouseReleased(const FInputActionValue& Value)
 	if (HasAuthority())
 	{
 		bIsRightMouseHeld = false;
+		UpdateRightLiftAnimation(false);
+		ServerReleaseObject(false);
 	}
 	else
 	{
 		Server_SetRightMouseHeld(false);
+	}
+}
+
+void ATT_CharacterPlayer::MulticastReleaseObject_Implementation(bool bIsLeft)
+{
+	UPhysicsHandleComponent* Handle = bIsLeft ? LeftHandle : RightHandle;
+	if (Handle && Handle->GrabbedComponent)
+	{
+		Handle->ReleaseComponent();
+	}
+}
+
+void ATT_CharacterPlayer::MulticastGrabObject_Implementation(bool bIsLeft, UPrimitiveComponent* TargetComp, FVector GrabLoc)
+{
+	if (!TargetComp) return;
+
+	UPhysicsHandleComponent* Handle = bIsLeft ? LeftHandle : RightHandle;
+	if (Handle)
+	{
+		Handle->GrabComponentAtLocationWithRotation(TargetComp, NAME_None, GrabLoc, TargetComp->GetComponentRotation());
+		UE_LOG(LogTemp, Warning, TEXT("[MulticastGrabObject] 호출됨 - 컴포넌트: %s, 위치: %s"),
+			*TargetComp->GetName(), *GrabLoc.ToString());
+	}
+}
+
+void ATT_CharacterPlayer::ServerReleaseObject_Implementation(bool bIsLeft)
+{
+	UPhysicsHandleComponent* Handle = bIsLeft ? LeftHandle : RightHandle;
+	if (Handle && Handle->GrabbedComponent)
+	{
+		Handle->ReleaseComponent();
+		MulticastReleaseObject(bIsLeft);
+	}
+}
+
+void ATT_CharacterPlayer::ServerGrabObject_Implementation(bool bIsLeft, UPrimitiveComponent* TargetComp)
+{
+	if (!TargetComp)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[TryGrab] HitComp가 null입니다."));
+		return;
+	}
+	else if (!TargetComp->IsSimulatingPhysics())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[TryGrab] HitComp는 물리 시뮬레이션이 켜져있지 않습니다: %s"), *TargetComp->GetName());
+	}
+	FVector GrabLoc = bIsLeft ? GetMesh()->GetSocketLocation(TEXT("hand_l"))
+		: GetMesh()->GetSocketLocation(TEXT("hand_r"));
+
+	UPhysicsHandleComponent* Handle = bIsLeft ? LeftHandle : RightHandle;
+	if (Handle)
+	{
+		Handle->GrabComponentAtLocationWithRotation(TargetComp, NAME_None, GrabLoc, TargetComp->GetComponentRotation());
+		MulticastGrabObject(bIsLeft, TargetComp, GrabLoc);
+		UE_LOG(LogTemp, Warning, TEXT("[ServerGrabObject] 호출됨: 손 = %s, 컴포넌트 = %s"),
+			bIsLeft ? TEXT("왼손") : TEXT("오른손"),
+			TargetComp ? *TargetComp->GetName() : TEXT("NULL"));
 	}
 }
 
@@ -455,3 +530,35 @@ void ATT_CharacterPlayer::RespawnAtCheckpoint()
 	}
 }
 
+void ATT_CharacterPlayer::TryGrabObject(bool bIsLeft)
+{
+	// 손 소켓 기준 시작점
+	FVector Start = bIsLeft ? GetMesh()->GetSocketLocation(TEXT("hand_l"))
+		: GetMesh()->GetSocketLocation(TEXT("hand_r"));
+
+	FVector End = Start + GetActorForwardVector() * 150.f;
+
+	FHitResult Hit;
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_PhysicsBody); // Physics 오브젝트만 감지
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this); // 자기 자신 제외
+
+	UE_LOG(LogTemp, Warning, TEXT("[TryGrab] 시작: 손 = %s"), bIsLeft ? TEXT("왼손") : TEXT("오른손"));
+	UE_LOG(LogTemp, Warning, TEXT("Start: %s | End: %s"), *Start.ToString(), *End.ToString());
+
+	// 트레이스 수행
+	if (GetWorld()->LineTraceSingleByObjectType(Hit, Start, End, ObjectQueryParams, Params))
+	{
+		UPrimitiveComponent* TargetComp = Hit.GetComponent();
+		if (TargetComp && TargetComp->IsSimulatingPhysics())
+		{
+			ServerGrabObject(bIsLeft, TargetComp);
+
+			// 시각 디버깅
+			DrawDebugLine(GetWorld(), Start, End, FColor::Green, false, 1.f, 0, 2.f);
+			UE_LOG(LogTemp, Warning, TEXT("[TryGrab] 트레이스 히트: %s"), *Hit.GetActor()->GetName());
+		}
+	}
+}

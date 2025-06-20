@@ -155,23 +155,26 @@ void UTT_RagdollComponent::StandUp_Internal()
 
     // 4. 레그돌 상태 해제
     bRagdoll = false;
-    // 6.1 부착 후 회전 포함 상대 트랜스폼 적용
-    FTransform FixedRelativeTransform(
-        FRotator(0.f, 0.f, -90.f), // 메시 회전 보정
-        SKMesh->GetRelativeLocation(),
-        SKMesh->GetRelativeScale3D()
-    );
-    // 6.2 상대 위치 복원
-    SKMesh->SetRelativeRotation(FRotator(0.f, 0.f, -90.f));
+    // 메시 분리
+    SKMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 
-    // 4. 상대 위치/스케일 복구
-    SKMesh->SetRelativeLocation(RelativeTransform.GetLocation());
-    SKMesh->SetRelativeScale3D(RelativeTransform.GetScale3D());
-    // 5. 스켈레탈 메시를 캡슐 컴포넌트에 붙이기
-    SKMesh->AttachToComponent(CapsuleComponent, FAttachmentTransformRules::KeepRelativeTransform, SocketName);
+    // 방향 판별 후 필요한 경우 Yaw 회전 보정
+    if (bHit == false) // 예: 등으로 누운 상태면 앞으로 돌리기
+    {
+        SKMesh->AddLocalRotation(FRotator(0.f, 180.f, 0.f));
+    }
 
-
-
+    // 메시 재부착 및 원래 상대 위치로 복원
+    SKMesh->AttachToComponent(CapsuleComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
+   
+   SKMesh->SetRelativeTransform(RelativeTransform);
+//     // 8. 상대 위치/회전 재설정 (정상 상태 기준)
+    SKMesh->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+//     SKMesh->SetRelativeScale3D(RelativeTransform.GetScale3D());
+    // 9. 로그
+    UE_LOG(LogTemp, Warning, TEXT(">>> Capsule Rotation: %s"), *CapsuleComponent->GetComponentRotation().ToString());
+    UE_LOG(LogTemp, Warning, TEXT(">>> Mesh World Rotation: %s"), *SKMesh->GetComponentRotation().ToString());
+    UE_LOG(LogTemp, Warning, TEXT(">>> Mesh Forward Vector: %s"), *SKMesh->GetForwardVector().ToString());
     // 7. 정상 이동 가능하도록 설정
     bCanMove = true;
 
@@ -212,10 +215,14 @@ void UTT_RagdollComponent::Server_SetRagdoll_Implementation(USkeletalMeshCompone
     CharacterMovement = InMovement;
     bUseActiveRagdollWhenWalking = bInUseActiveRagdoll;
 
-    // 상대 트랜스폼 저장
-    if (IsValid(SKMesh))
+    // 상대 트랜스폼 저장 (레그돌이 아직 아니어야 정상 회전 저장됨)
+    if (!bRagdoll && IsValid(SKMesh))
     {
         RelativeTransform = SKMesh->GetRelativeTransform();
+
+        UE_LOG(LogTemp, Warning, TEXT(">> [Setup] RelativeTransform 저장 시점"));
+        UE_LOG(LogTemp, Warning, TEXT(">> Location: %s"), *RelativeTransform.GetLocation().ToString());
+        UE_LOG(LogTemp, Warning, TEXT(">> Rotation: %s"), *RelativeTransform.GetRotation().Rotator().ToString());
     }
 
     // 초기 세팅 (예: 물리 애니메이션 초기화 등)

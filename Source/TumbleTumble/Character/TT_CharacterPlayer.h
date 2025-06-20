@@ -40,7 +40,10 @@ public:
 	void Look(const FInputActionValue& Value);
 
 
-
+//애니메이션 
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Animation")
+TSubclassOf<UAnimInstance> DefaultAnimInstance;
 
 protected:
 
@@ -139,19 +142,11 @@ public:
 	//팔설정 
 public:
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arm", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<class UTT_ArmTargetComponent> LeftArmTarget;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arm", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<class UTT_ArmTargetComponent> RightArmTarget;
-
-	/**
-	 * 왼손 수직 입력값을 받아 제어하는 함수입니다.
-	 * 마우스를 위아래로 움직여 팔을 위로 들거나 내릴 수 있습니다.
-	 * @param Value - EnhancedInput에서 전달된 1D 또는 2D 입력값
-	 */
-	UFUNCTION()
-	void ControlLeftArmVertical(const FInputActionValue& Value);
+	//팔애니메이션 왼손
+	void UpdateLeftLiftAnimation(bool bLifting);
+	//팔애니메이션 오른쪽
+	void UpdateRightLiftAnimation(bool bLifting);
 
 	/**
 	 * 왼쪽 마우스 버튼을 눌렀을 때 호출됩니다.
@@ -180,7 +175,7 @@ public:
 	void OnRightMouseReleased(const FInputActionValue& Value);
 
 
-
+//팔설정
 protected:
 	/**
 	 * 왼쪽 마우스가 눌린 상태를 추적하는 변수입니다. (서버에서도 동기화됨)
@@ -192,6 +187,16 @@ protected:
  */
 	UPROPERTY(Replicated)
 	bool bIsRightMouseHeld = false;
+
+	/** 물체 감지 거리 */
+    UPROPERTY(EditDefaultsOnly)
+    float GrabDistance = 300.f;
+	/** 감지 채널 */
+   
+   UPROPERTY(EditDefaultsOnly)
+    TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
+
+
 
 	/**
  * Server_SetLeftMouseHeld는 서버에게 bIsLeftMouseHeld 상태를 변경하도록 요청합니다 (RPC).
@@ -207,5 +212,70 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void Server_SetRightMouseHeld(bool bNewState);
+
+
+
+//잡기
+public:
+	/**
+	 * ServerGrabObject는 서버에서 지정된 손(왼손 또는 오른손)으로 물체를 집도록 처리합니다.
+	 *
+	 * @param bIsLeft - true일 경우 왼손, false일 경우 오른손으로 판단합니다.
+	 * @param TargetComp - 잡을 대상 컴포넌트 (UPrimitiveComponent 기반)
+	 *
+	 * 이 함수는 클라이언트에서 입력에 따라 호출되며, 서버에서 권한을 가지고 Grab 처리를 수행합니다.
+	 * 예: 왼쪽 마우스를 눌렀을 때 물체를 서버 권한으로 Grab 처리할 때 사용됩니다.
+	 */
+UFUNCTION(Server, Reliable)
+void ServerGrabObject(bool bIsLeft, UPrimitiveComponent* TargetComp);
+/**
+ * ServerReleaseObject는 서버에서 지정된 손(왼손 또는 오른손)의 물체 잡기를 해제하는 함수입니다.
+ *
+ * @param bIsLeft - true일 경우 왼손, false일 경우 오른손으로 판단합니다.
+ *
+ * 이 함수는 클라이언트가 마우스를 놓았을 때 서버에서 물체 잡기를 해제하기 위해 사용됩니다.
+ * 예: 오른쪽 마우스 버튼에서 손을 뗐을 때 해당 손의 Grab을 해제할 때 사용됩니다.
+ */
+UFUNCTION(Server, Reliable)
+void ServerReleaseObject(bool bIsLeft);
+/**
+ * MulticastGrabObject는 모든 클라이언트에서 지정된 손으로 물체를 Grab한 것처럼 보이게 동기화합니다.
+ *
+ * @param bIsLeft - true일 경우 왼손, false일 경우 오른손
+ * @param TargetComp - Grab 대상 컴포넌트
+ * @param GrabLoc - Grab 시 손이 향해야 할 위치 (손 소켓 기준 위치)
+ *
+ * 이 함수는 서버에서 GrabObject를 성공적으로 처리한 후, 클라이언트들에게 시각적 Grab을 동기화할 때 사용됩니다.
+ * 예: 물체가 손 위치로 붙는 연출을 모두에게 보여줄 때 사용됩니다.
+ */
+UFUNCTION(NetMulticast, Unreliable)
+void MulticastGrabObject(bool bIsLeft, UPrimitiveComponent* TargetComp, FVector GrabLoc);
+
+/**
+ * MulticastReleaseObject는 모든 클라이언트에서 Grab 해제를 동기화하는 함수입니다.
+ *
+ * @param bIsLeft - true일 경우 왼손, false일 경우 오른손
+ *
+ * 서버에서 Grab 해제가 일어난 후, 해당 손의 물체 잡기 상태를 모든 클라이언트에게 반영시켜주는 역할을 합니다.
+ * 예: 물체가 손에서 떨어지는 연출을 모두가 보게 하고 싶을 때 사용됩니다.
+ */
+UFUNCTION(NetMulticast, Unreliable)
+void MulticastReleaseObject(bool bIsLeft);
+
+protected:
+
+	/**
+	 * TryGrab은 왼손 또는 오른손의 소켓 위치를 기준으로 앞 방향으로 트레이스를 쏴서
+	 * 잡을 수 있는 물체가 있을 경우 PhysicsHandle을 통해 집는 함수입니다.
+	 *
+	 * @param bIsLeft - true일 경우 왼손, false일 경우 오른손 기준
+	 */	
+	 void TryGrabObject(bool bIsLeft);
+
+	UPROPERTY(VisibleAnywhere, Category = "Grab")
+TObjectPtr<class UPhysicsHandleComponent> LeftHandle;
+
+UPROPERTY(VisibleAnywhere, Category = "Grab")
+TObjectPtr<class UPhysicsHandleComponent> RightHandle;
 
 };
