@@ -1,124 +1,226 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Chat/ChatTestController.h"
+#include "Chat/ChatWidget.h" 
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "Engine/GameInstance.h"
+#include "Blueprint/UserWidget.h"
+
+AChatTestController::AChatTestController()
+{
+	ConstructorHelpers::FClassFinder<UChatWidget> ChatWidgetRef(TEXT("/Game/sounchoi/WBP_ChatWidget.WBP_ChatWidget_C"));
+
+	if (ChatWidgetRef.Succeeded())
+	{
+		this->ChatWidgetClass = ChatWidgetRef.Class;
+	}
+
+	this->SetShowMouseCursor(true);
+}
 
 void AChatTestController::BeginPlay()
 {
-    Super::BeginPlay();
+	Super::BeginPlay();
 
-    this->SubsystemChatManager = GetGameInstance()->GetSubsystem<UChatManager>();
+	// 데디서버는 작동하지 않음.
+	if (this->HasAuthority() == true && this->IsLocalController() == false)
+	{
+		UE_LOG(LogTemp, Log, TEXT("데디케이티드 서버는 하지 않음."));
+		return ;
+	}
 
-    if (this->SubsystemChatManager)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerController: ChatManager 연결 완료."));
+	// 변수 초기화.
+	this->ChatManager = nullptr;
+	this->ChatWidget = nullptr;
 
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green,
-                TEXT("ChatManager 준비 완료, 콘솔에서 ChatConnect 사용 가능."));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("PlayerController: ChatManager 찾을 수 없음."));
-    }
+	// ChatManager 가져오기.
+	this->ChatManager = this->GetGameInstance()->GetSubsystem<UChatManager>();
+	if (this->ChatManager == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ChatManager를 찾을 수 없습니다."));
+		return ;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("채팅 시스템 초기화 완료."));
+
+	// 채팅 UI 생성 및 표시.
+	this->CreateChatUI();
+
+	// 안내 메시지
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("채팅 시스템 준비 완료."));
+	}
+
+	// 데디케이티드 서버 접속 완료 - 채팅서버 연결
+	this->ConnectToChat();
+}
+
+void AChatTestController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{`
+	// 데디서버는 작동하지 않음.
+	if (this->HasAuthority() == true && this->IsLocalController() == false)
+	{
+		Super::EndPlay(EndPlayReason);
+		return ;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("게임 종료 - 채팅 연결 해제"));
+
+	// 채팅서버 연결 해제
+	this->DisconnectFromChat();
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void AChatTestController::PlayerTick(float DeltaTime)
 {
-    UChatManager* ChatManager = this->GetChatManager();
-    if (ChatManager == nullptr || ChatManager->GetConnectionState() != EChatConnectionState::Connected)
-    {
-        return;
-    }
-    ChatManager->CheckForMessages();
-}
+	Super::PlayerTick(DeltaTime);
 
-UChatManager* AChatTestController::GetChatManager()
-{
-    if (this->SubsystemChatManager == nullptr)
-    {
-        this->SubsystemChatManager = GetGameInstance()->GetSubsystem<UChatManager>();
-    }
-    return (this->SubsystemChatManager);
-}
+	// 데디서버는 작동하지 않음.
+	if (this->HasAuthority() == true && this->IsLocalController() == false)
+	{
+		return;
+	}
 
-void AChatTestController::ChatConnect(const FString& IP, int32 Port)
-{
-    UChatManager* ChatManager = this->GetChatManager();
-    if (ChatManager == nullptr)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[Exec] ChatManager 없음."));
-        return;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[Exec] ChatConnect 실행: %s:%d."), *IP, Port);
-
-    bool bSuccess = ChatManager->ConnectToServer(IP, Port);
-
-    FString Message = bSuccess ?
-        FString::Printf(TEXT("[Chat] 연결 시도: %s:%d"), *IP, Port) :
-        FString::Printf(TEXT("[Chat] 연결 실패: %s:%d"), *IP, Port);
-
-    FColor Color = bSuccess ? FColor::Green : FColor::Red;
-
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 5.0f, Color, Message);
-    }
-}
-
-void AChatTestController::ChatDisconnect()
-{
-    UChatManager* ChatManager = this->GetChatManager();
-    if (ChatManager == nullptr)
-    {
-        return;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[Exec] ChatDisconnect 실행."));
-
-    ChatManager->DisconnectFromServer();
-
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Orange,
-            TEXT("[Chat] 연결 해제됨."));
-    }
+	// 메시지 수신 체크
+	if (this->ChatManager && this->ChatManager->GetConnectionState() == EChatConnectionState::Connected)
+	{
+		this->ChatManager->CheckForMessages();
+	}
 }
 
 void AChatTestController::ChatSend(const FString& Message)
 {
-    UChatManager* ChatManager = this->GetChatManager();
-    if (ChatManager == nullptr)
-    {
-        return ;
-    }
+	// 데디서버는 작동하지 않음.
+	if (this->HasAuthority() == true && this->IsLocalController() == false)
+	{
+		return;
+	}
 
-    UE_LOG(LogTemp, Warning, TEXT("[Exec] ChatSend 실행: %s."), *Message);
+	if (this->ChatManager == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ChatManager가 없습니다"));
+		return ;
+	}
 
-    if (Message.IsEmpty())
-    {
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow,
-                TEXT("[Chat] 메시지를 입력하세요! 예: ChatSend Hello"));
-        }
-        return ;
-    }
+	if (Message.IsEmpty())
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow, TEXT("사용법: ChatSend 메세지"));
+		}
+		return;
+	}
 
-    bool bSuccess = ChatManager->SendMessage(Message);
+	// 연결 상태 확인
+	if (this->ChatManager->GetConnectionState() != EChatConnectionState::Connected)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("채팅서버에 연결되어 있지 않습니다"));
+		}
+		return ;
+	}
 
-    FString DisplayMessage = bSuccess ?
-        FString::Printf(TEXT("[Chat] 전송: %s."), *Message) :
-        TEXT("[Chat] 전송 실패 - 연결을 확인하세요.");
+	// 메시지 전송
+	bool bSuccess = this->ChatManager->SendMessage(Message);
 
-    FColor Color = bSuccess ? FColor::Cyan : FColor::Red;
+	if (GEngine)
+	{
+		FColor Color = bSuccess ? FColor::Green : FColor::Red;
+		FString ResultMessage = bSuccess ? FString::Printf(TEXT("메시지 전송: %s"), *Message) : TEXT("메시지 전송 실패");
+		GEngine->AddOnScreenDebugMessage(-1, 3.0f, Color, ResultMessage);
+	}
+}
 
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 5.0f, Color, DisplayMessage);
-    }
+UChatManager* AChatTestController::GetChatManager()
+{
+	// chatManager가 없다면 서브시스템에서 다시 가져옵니다.
+	if (this->ChatManager == nullptr)
+	{
+		this->ChatManager = GetGameInstance()->GetSubsystem<UChatManager>();
+	}
+	return (this->ChatManager);
+}
+
+void AChatTestController::CreateChatUI()
+{
+	UE_LOG(LogTemp, Log, TEXT("채팅 UI 생성"));
+
+	// 이미 생성되어 있으면 무시
+	if (this->ChatWidget)
+	{
+		return ;
+	}
+
+	this->ChatWidget = CreateWidget<UChatWidget>(this->GetWorld(), this->ChatWidgetClass);
+
+	if (this->ChatWidget == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("채팅 UI 생성 실패!"));
+		return ;
+	}
+
+	// 화면에 표시
+	this->ChatWidget->AddToViewport();
+
+	UE_LOG(LogTemp, Log, TEXT("채팅 UI 생성 완료"));
+}
+
+void AChatTestController::ConnectToChat()
+{
+	UE_LOG(LogTemp, Error, TEXT("여기까지는 옴"));
+	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, TEXT("여기까지는 옴"));
+
+	if (this->ChatManager == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ChatManager가 없어서 연결 실패"));
+		return;
+	}
+
+	// 이미 연결되어 있으면 무시
+	if (this->ChatManager->GetConnectionState() == EChatConnectionState::Connected)
+	{
+		UE_LOG(LogTemp, Log, TEXT("이미 채팅서버에 연결되어 있음"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("채팅서버 연결 시도: %s:%d"), *(this->ChatServerIP), this->ChatServerPort);
+
+	bool bSuccess = this->ChatManager->ConnectToServer(this->ChatServerIP, this->ChatServerPort);
+
+	if (bSuccess)
+	{
+		UE_LOG(LogTemp, Log, TEXT("채팅서버 연결 성공!"));
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, TEXT("채팅서버 연결 성공!"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("채팅서버 연결 실패"));
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("채팅서버 연결 실패"));
+		}
+	}
+}
+
+void AChatTestController::DisconnectFromChat()
+{
+	if (this->ChatManager == nullptr)
+	{
+		return ;
+	}
+
+	if (this->ChatManager->GetConnectionState() == EChatConnectionState::Connected)
+	{
+		this->ChatManager->DisconnectFromServer();
+		UE_LOG(LogTemp, Log, TEXT("채팅서버 연결 해제"));
+	}
 }
