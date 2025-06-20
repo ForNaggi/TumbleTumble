@@ -15,7 +15,10 @@ public class TumbleTumble : ModuleRules
 			"InputCore", 
 			"EnhancedInput",
             "Sockets",
-            "Networking"
+            "Networking",
+			"UMG",
+            "Slate",
+            "SlateCore"
         });
 	}
 }

@@ -1,0 +1,1 @@
+"C:\dedicatedServer\Engine\Binaries\Win64\UnrealEditor.exe" "C:\Users\user\OneDrive\Desktop\Tunble\TumbleTumble.uproject" testChatMap -server -log -port=7777
