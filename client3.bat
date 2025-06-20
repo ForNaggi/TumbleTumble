@@ -1,0 +1,1 @@
+"C:\dedicatedServer\Engine\Binaries\Win64\UnrealEditor.exe" "C:\Users\user\OneDrive\Desktop\Tunble\TumbleTumble.uproject" PrevMap -game -ResX=640 -ResY=480 -WinX=0 -WinY=0 -log
