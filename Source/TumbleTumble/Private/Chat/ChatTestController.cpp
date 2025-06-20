@@ -58,7 +58,7 @@ void AChatTestController::BeginPlay()
 }
 
 void AChatTestController::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{`
+{
 	// 데디서버는 작동하지 않음.
 	if (this->HasAuthority() == true && this->IsLocalController() == false)
 	{
