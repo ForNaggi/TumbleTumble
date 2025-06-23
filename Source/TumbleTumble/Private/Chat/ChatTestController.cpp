@@ -15,8 +15,6 @@ AChatTestController::AChatTestController()
 	{
 		this->ChatWidgetClass = ChatWidgetRef.Class;
 	}
-
-	this->SetShowMouseCursor(true);
 }
 
 void AChatTestController::BeginPlay()
@@ -27,19 +25,21 @@ void AChatTestController::BeginPlay()
 	if (this->HasAuthority() == true && this->IsLocalController() == false)
 	{
 		UE_LOG(LogTemp, Log, TEXT("데디케이티드 서버는 하지 않음."));
-		return ;
+		return;
 	}
 
 	// 변수 초기화.
 	this->ChatManager = nullptr;
 	this->ChatWidget = nullptr;
-
+	this->SetShowMouseCursor(true);
+	FInputModeGameAndUI InputMode;
+	this->SetInputMode(InputMode);
 	// ChatManager 가져오기.
 	this->ChatManager = this->GetGameInstance()->GetSubsystem<UChatManager>();
 	if (this->ChatManager == nullptr)
 	{
 		UE_LOG(LogTemp, Error, TEXT("ChatManager를 찾을 수 없습니다."));
-		return ;
+		return;
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("채팅 시스템 초기화 완료."));
@@ -63,7 +63,7 @@ void AChatTestController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (this->HasAuthority() == true && this->IsLocalController() == false)
 	{
 		Super::EndPlay(EndPlayReason);
-		return ;
+		return;
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("게임 종료 - 채팅 연결 해제"));
@@ -102,7 +102,7 @@ void AChatTestController::ChatSend(const FString& Message)
 	if (this->ChatManager == nullptr)
 	{
 		UE_LOG(LogTemp, Error, TEXT("ChatManager가 없습니다"));
-		return ;
+		return;
 	}
 
 	if (Message.IsEmpty())
@@ -121,7 +121,7 @@ void AChatTestController::ChatSend(const FString& Message)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("채팅서버에 연결되어 있지 않습니다"));
 		}
-		return ;
+		return;
 	}
 
 	// 메시지 전송
@@ -152,7 +152,7 @@ void AChatTestController::CreateChatUI()
 	// 이미 생성되어 있으면 무시
 	if (this->ChatWidget)
 	{
-		return ;
+		return;
 	}
 
 	this->ChatWidget = CreateWidget<UChatWidget>(this->GetWorld(), this->ChatWidgetClass);
@@ -160,7 +160,7 @@ void AChatTestController::CreateChatUI()
 	if (this->ChatWidget == nullptr)
 	{
 		UE_LOG(LogTemp, Error, TEXT("채팅 UI 생성 실패!"));
-		return ;
+		return;
 	}
 
 	// 화면에 표시
@@ -215,7 +215,7 @@ void AChatTestController::DisconnectFromChat()
 {
 	if (this->ChatManager == nullptr)
 	{
-		return ;
+		return;
 	}
 
 	if (this->ChatManager->GetConnectionState() == EChatConnectionState::Connected)

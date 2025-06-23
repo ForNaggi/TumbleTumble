@@ -24,6 +24,9 @@
 *.gch
 *.pch
 
+#zip file
+*.zip
+
 # Compiled Dynamic libraries
 *.so
 *.dylib

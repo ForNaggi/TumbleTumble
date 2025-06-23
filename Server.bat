@@ -1,1 +1,1 @@
-"C:\dedicatedServer\Engine\Binaries\Win64\UnrealEditor.exe" "C:\Users\user\OneDrive\Desktop\Tunble\TumbleTumble.uproject" testChatMap -server -log -port=7777
+"C:\Unreal\UnrealEngine\Engine\Binaries\Win64\UnrealEditor.exe" "C:\Unreal\TumbleTumble\TumbleTumble.uproject" ThirdPersonExampleMap -server -log -port=7777

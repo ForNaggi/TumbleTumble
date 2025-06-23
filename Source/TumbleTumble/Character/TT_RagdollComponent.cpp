@@ -204,6 +204,7 @@ void UTT_RagdollComponent::Server_StandUp_Implementation()
 
 void UTT_RagdollComponent::Server_SetRagdoll_Implementation(USkeletalMeshComponent* InMesh, UCapsuleComponent* InCapsule, const FName& InSocketName, UPhysicalAnimationComponent* InPhysicalAnim, const FName& InRightFoot, const FName& InLeftFoot, UCharacterMovementComponent* InMovement, bool bInUseActiveRagdoll)
 {
+    
     if (!GetOwner()->HasAuthority()) return;
 
     SKMesh = InMesh;
@@ -240,6 +241,7 @@ void UTT_RagdollComponent::Server_ActivateRagdoll_Implementation()
     {
         return;
     }
+    UE_LOG(LogTemp, Warning, TEXT("RagDoll상태임"));
 
     // 1. 물리 애니메이션 설정 적용
 

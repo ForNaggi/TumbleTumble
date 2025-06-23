@@ -149,7 +149,6 @@ void ATT_CharacterPlayer::BeginPlay()
 	Super::BeginPlay();
 
 	// Add InputMapping Context to Enhanced Input System.
-	APlayerController* PlayerController = Cast<APlayerController>(GetController());
 
 	// [중요] 서버는 LocalPlayer가 존재하지 않기 때문에 GetLocalPlayer()는 nullptr를 반환함
 	// 따라서 Client에서만 실행되도록 조건 추가
@@ -165,6 +164,22 @@ void ATT_CharacterPlayer::BeginPlay()
 			);
 		}, 0.2f, false);
 	// 델리게이트 바인딩
+		// [클라이언트 전용 처리] - 인풋 매핑 재설정
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (PC->IsLocalController())
+		{
+			if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+			{
+				if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("PossessedBy 입력 매핑 추가: %s"), *PC->GetName());
+					SubSystem->AddMappingContext(DefaultMappingContext, 0);
+				}
+			}
+		}
+	}
+
 }
 
 void ATT_CharacterPlayer::Tick(float Deltatime)
@@ -211,23 +226,11 @@ void ATT_CharacterPlayer::PossessedBy(AController* NewController)
 		LastSavePoint = GetActorLocation();
 		// 델리게이트 바인딩
 		OnCheckpointUpdated.AddDynamic(this, &ATT_CharacterPlayer::UpdateCheckpoint);
-	}
+		UE_LOG(LogTemp, Warning, TEXT("UpdateCheckpoint중입니다"));
 
-	// [클라이언트 전용 처리] - 인풋 매핑 재설정
-	if (APlayerController* PC = Cast<APlayerController>(NewController))
-	{
-		if (PC->IsLocalController())
-		{
-			if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
-			{
-				if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
-				{
-					UE_LOG(LogTemp, Warning, TEXT("PossessedBy 입력 매핑 추가: %s"), *PC->GetName());
-					SubSystem->AddMappingContext(DefaultMappingContext, 0);
-				}
-			}
-		}
 	}
+	UE_LOG(LogTemp, Warning, TEXT("Possesseby 성공"));
+
 }
 
 void ATT_CharacterPlayer::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -267,10 +270,13 @@ void ATT_CharacterPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInput
 
 void ATT_CharacterPlayer::Move(const FInputActionValue& Value)
 {
-	if (RagdollComponent && !RagdollComponent->bCanMove)
-	{
-		return; // Ragdoll 상태에선 이동 금지
-	}
+	UE_LOG(LogTemp, Warning, TEXT(" Move 는 불립니다"));
+
+	//@TODO
+// 	if (RagdollComponent && !RagdollComponent->bCanMove)
+// 	{
+// 		return; // Ragdoll 상태에선 이동 금지
+// 	}
 
 	// 입력 값 읽기.
 	FVector2D Movement = Value.Get<FVector2D>();
@@ -286,7 +292,8 @@ void ATT_CharacterPlayer::Move(const FInputActionValue& Value)
 	// 무브먼트 컴포넌트에 값 전달.
 	AddMovementInput(ForwardVector, Movement.X);
 	AddMovementInput(RightVector, Movement.Y);
-	// 	UE_LOG(LogTemp, Warning, TEXT(" Move Called: X = %f, Y = %f"), Movement.X, Movement.Y);
+  UE_LOG(LogTemp, Warning, TEXT(" Move Called: X = %f, Y = %f"), Movement.X, Movement.Y);
+
 
 
 }
