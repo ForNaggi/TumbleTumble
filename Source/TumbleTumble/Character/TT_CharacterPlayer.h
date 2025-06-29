@@ -197,6 +197,23 @@ protected:
     TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
 
 
+		/**
+ * OnRep_LeftMouseHeld는 bIsLeftMouseHeld가 서버에서 변경되어 클라이언트로 복제될 때 호출됩니다.
+ *
+ * @brief 왼손 들기 애니메이션 상태를 클라이언트에서 갱신합니다.
+ */
+UFUNCTION()
+void OnRep_LeftMouseHeld();
+
+/**
+ * OnRep_RightMouseHeld는 bIsRightMouseHeld가 서버에서 변경되어 클라이언트로 복제될 때 호출됩니다.
+ *
+ * @brief 오른손 들기 애니메이션 상태를 클라이언트에서 갱신합니다.
+ */
+UFUNCTION()
+void OnRep_RightMouseHeld();
+
+
 
 	/**
  * Server_SetLeftMouseHeld는 서버에게 bIsLeftMouseHeld 상태를 변경하도록 요청합니다 (RPC).
@@ -218,64 +235,54 @@ protected:
 //잡기
 public:
 	/**
-	 * ServerGrabObject는 서버에서 지정된 손(왼손 또는 오른손)으로 물체를 집도록 처리합니다.
+	 * ServerGrabObject는 지정된 손의 PhysicsConstraintComponent를 사용해 타겟 물체와 물리적으로 연결하는 함수입니다.
 	 *
-	 * @param bIsLeft - true일 경우 왼손, false일 경우 오른손으로 판단합니다.
-	 * @param TargetComp - 잡을 대상 컴포넌트 (UPrimitiveComponent 기반)
+	 * @param bIsLeft - true이면 왼손, false이면 오른손을 의미합니다.
+	 * @param TargetComp - 손에 붙일 대상 UPrimitiveComponent (Physics Simulate가 활성화되어 있어야 함)
 	 *
-	 * 이 함수는 클라이언트에서 입력에 따라 호출되며, 서버에서 권한을 가지고 Grab 처리를 수행합니다.
-	 * 예: 왼쪽 마우스를 눌렀을 때 물체를 서버 권한으로 Grab 처리할 때 사용됩니다.
+	 * 이 함수는 클라이언트 입력을 받은 후 서버에서 호출되며, 제약 연결 결과는 자동으로 클라이언트에 복제됩니다.
+	 * 예: 캐릭터가 상자를 잡을 때 손에 달라붙는 효과를 구현할 수 있습니다.
 	 */
-UFUNCTION(Server, Reliable)
+	 UFUNCTION(Server, Reliable)
 void ServerGrabObject(bool bIsLeft, UPrimitiveComponent* TargetComp);
 /**
- * ServerReleaseObject는 서버에서 지정된 손(왼손 또는 오른손)의 물체 잡기를 해제하는 함수입니다.
+ * ServerReleaseObject는 지정된 손에 연결된 PhysicsConstraintComponent의 제약을 해제하는 함수입니다.
  *
- * @param bIsLeft - true일 경우 왼손, false일 경우 오른손으로 판단합니다.
+ * @param bIsLeft - true이면 왼손, false이면 오른손을 의미합니다.
  *
- * 이 함수는 클라이언트가 마우스를 놓았을 때 서버에서 물체 잡기를 해제하기 위해 사용됩니다.
- * 예: 오른쪽 마우스 버튼에서 손을 뗐을 때 해당 손의 Grab을 해제할 때 사용됩니다.
+ * 이 함수는 클라이언트 입력을 받은 후 서버에서 호출되며, 연결 해제 상태는 자동으로 클라이언트에 복제됩니다.
+ * 예: 마우스 버튼을 놓았을 때 손이 물체에서 떨어지도록 할 수 있습니다.
  */
 UFUNCTION(Server, Reliable)
 void ServerReleaseObject(bool bIsLeft);
-/**
- * MulticastGrabObject는 모든 클라이언트에서 지정된 손으로 물체를 Grab한 것처럼 보이게 동기화합니다.
- *
- * @param bIsLeft - true일 경우 왼손, false일 경우 오른손
- * @param TargetComp - Grab 대상 컴포넌트
- * @param GrabLoc - Grab 시 손이 향해야 할 위치 (손 소켓 기준 위치)
- *
- * 이 함수는 서버에서 GrabObject를 성공적으로 처리한 후, 클라이언트들에게 시각적 Grab을 동기화할 때 사용됩니다.
- * 예: 물체가 손 위치로 붙는 연출을 모두에게 보여줄 때 사용됩니다.
- */
-UFUNCTION(NetMulticast, Unreliable)
-void MulticastGrabObject(bool bIsLeft, UPrimitiveComponent* TargetComp, FVector GrabLoc);
-
-/**
- * MulticastReleaseObject는 모든 클라이언트에서 Grab 해제를 동기화하는 함수입니다.
- *
- * @param bIsLeft - true일 경우 왼손, false일 경우 오른손
- *
- * 서버에서 Grab 해제가 일어난 후, 해당 손의 물체 잡기 상태를 모든 클라이언트에게 반영시켜주는 역할을 합니다.
- * 예: 물체가 손에서 떨어지는 연출을 모두가 보게 하고 싶을 때 사용됩니다.
- */
-UFUNCTION(NetMulticast, Unreliable)
-void MulticastReleaseObject(bool bIsLeft);
 
 protected:
 
 	/**
-	 * TryGrab은 왼손 또는 오른손의 소켓 위치를 기준으로 앞 방향으로 트레이스를 쏴서
-	 * 잡을 수 있는 물체가 있을 경우 PhysicsHandle을 통해 집는 함수입니다.
+	 * TryGrabObject는 손 위치에서 전방으로 라인 트레이스를 실행하여 물체를 감지하고 서버에 집기 요청을 전송하는 함수입니다.
 	 *
-	 * @param bIsLeft - true일 경우 왼손, false일 경우 오른손 기준
-	 */	
-	 void TryGrabObject(bool bIsLeft);
+	 * @param bIsLeft - true이면 왼손, false이면 오른손을 의미합니다.
+	 *
+	 * 이 함수는 클라이언트에서 실행되며, 물체를 감지하면 ServerGrabObject를 호출하여 서버가 물리 제약을 연결하도록 합니다.
+	 * 예: 마우스 클릭 시 가까운 상자를 손으로 잡게 하고 싶을 때 사용합니다.
+	 */
+	 // 	 void TryGrabObject(bool bIsLeft);
 
-	UPROPERTY(VisibleAnywhere, Category = "Grab")
-TObjectPtr<class UPhysicsHandleComponent> LeftHandle;
+	 // 손 제약 컴포넌트
+UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grab", meta = (AllowPrivateAccess = "true"))
+TObjectPtr<class UPhysicsConstraintComponent> LeftConstraint;
 
-UPROPERTY(VisibleAnywhere, Category = "Grab")
-TObjectPtr<class UPhysicsHandleComponent> RightHandle;
+UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grab", meta = (AllowPrivateAccess = "true"))
+TObjectPtr<class UPhysicsConstraintComponent> RightConstraint;
+
+
+//잡은 물체를 저장하기 위한 컴포넌트 추가 
+UPROPERTY(VisibleAnywhere)
+TObjectPtr<class UTTGrabDetectorComponent> LeftGrabDetector;
+
+UPROPERTY(VisibleAnywhere)
+TObjectPtr<class UTTGrabDetectorComponent> RightGrabDetector;
+
+
 
 };

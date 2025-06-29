@@ -28,4 +28,5 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lift")
     bool bLiftRight;
 	
+    virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 };

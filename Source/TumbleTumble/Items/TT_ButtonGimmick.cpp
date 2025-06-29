@@ -16,18 +16,18 @@ ATT_ButtonGimmick::ATT_ButtonGimmick()
     ButtonBaseMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ButtonBaseMesh"));
     ButtonBaseMesh->SetupAttachment(RootComponent);
 
-    MainCollider = CreateDefaultSubobject<UBoxComponent>(TEXT("MainCollider"));
-    MainCollider->SetupAttachment(RootComponent);
+//     MainCollider = CreateDefaultSubobject<UBoxComponent>(TEXT("MainCollider"));
+//     MainCollider->SetupAttachment(RootComponent);
 
     ButtonMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ButtonMesh"));
-    ButtonMesh->SetupAttachment(MainCollider);
+    ButtonMesh->SetupAttachment(RootComponent);
 
     OverlapVolume = CreateDefaultSubobject<UBoxComponent>(TEXT("OverlapVolume"));
     OverlapVolume->SetupAttachment(RootComponent);
-    OverlapVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-    OverlapVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
-    OverlapVolume->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
-    OverlapVolume->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Overlap);
+//     OverlapVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+//     OverlapVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
+//     OverlapVolume->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+//     OverlapVolume->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Overlap);
     OverlapVolume->SetGenerateOverlapEvents(true);
 }
 
@@ -49,8 +49,8 @@ void ATT_ButtonGimmick::BeginPlay()
 {
     if (HasAuthority()) // 서버에서만 오버랩 바인딩
     {
-        MainCollider->OnComponentBeginOverlap.AddDynamic(this, &ATT_ButtonGimmick::OnBeginOverlap);
-        MainCollider->OnComponentEndOverlap.AddDynamic(this, &ATT_ButtonGimmick::OnEndOverlap);
+        OverlapVolume->OnComponentBeginOverlap.AddDynamic(this, &ATT_ButtonGimmick::OnBeginOverlap);
+        OverlapVolume->OnComponentEndOverlap.AddDynamic(this, &ATT_ButtonGimmick::OnEndOverlap);
     }
     // 초기 위치 저장
     InitialButtonLocation = ButtonMesh->GetRelativeLocation();
@@ -126,6 +126,6 @@ void ATT_ButtonGimmick::CheckAndOpenDoor()
 
 void ATT_ButtonGimmick::HandlePressProgress(float Value)
 {
-    FVector Offset = FVector(0.f, 0.f, -PressDistance * Value);
+    FVector Offset = FVector(0.f, 0.7f, -PressDistance * Value);
     ButtonMesh->SetRelativeLocation(InitialButtonLocation + Offset);
 }

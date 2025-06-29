@@ -18,11 +18,10 @@ class TUMBLETUMBLE_API ATT_BoxGimmick : public ATT_GimIckBase
 public:
 	ATT_BoxGimmick();
 
+	void virtual BeginPlay() override;
+
 public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<class UStaticMeshComponent> BoxMesh;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<class UBoxComponent> OverlapPoint;
-	
 };

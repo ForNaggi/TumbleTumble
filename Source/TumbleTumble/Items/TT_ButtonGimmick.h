@@ -25,17 +25,15 @@ public:
 protected:
     virtual void BeginPlay() override;
  
-UPROPERTY(VisibleAnywhere)
+UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 TObjectPtr<class UBoxComponent> OverlapVolume;  // 실제 트리거용
 
-UPROPERTY(VisibleAnywhere)
+UPROPERTY(VisibleAnywhere,BlueprintReadWrite)
 TObjectPtr < class UStaticMeshComponent> ButtonBaseMesh;
 
-UPROPERTY(VisibleAnywhere)
+UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 TObjectPtr < class UStaticMeshComponent> ButtonMesh;
 
-UPROPERTY(VisibleAnywhere)
-TObjectPtr < class UBoxComponent> MainCollider; // 눌리는 감각 연출용 (움직이는 부분)
 
     // 버튼에 연결된 문 목록
     UPROPERTY(EditAnywhere, Replicated)
@@ -72,7 +70,7 @@ UCurveFloat* PressCurve;
 
 // 버튼 눌림 거리
 UPROPERTY(EditAnywhere, Category = "Button|Visual")
-float PressDistance = 6.f;
+float PressDistance = 11.0f;
 
 // 초기 위치 저장용
 FVector InitialButtonLocation;
